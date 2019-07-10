@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.aidlclient">
 
+    <permission
+        android:name="com.example.aidlserver.ACCESS_CONNECT_SERVICE"
+        android:protectionLevel="normal" />
+    <uses-permission android:name="com.example.aidlserver.ACCESS_CONNECT_SERVICE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

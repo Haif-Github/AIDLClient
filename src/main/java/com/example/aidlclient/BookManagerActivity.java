@@ -34,6 +34,27 @@ public class BookManagerActivity extends AppCompatActivity {
             }
         });
 
+        findViewById(R.id.tv2).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                // 调用远程服务端的方法，有可能是耗时操作，所以最好放在子线程中
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            if (mRemoteBookManager != null) {
+                                List<Book> bookList = mRemoteBookManager.getBookList();
+                                Log.e("", "---getBookList: " + bookList);
+                            }
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }).start();
+            }
+        });
+
     }
 
     private void bindRemoteService() {
@@ -47,9 +68,9 @@ public class BookManagerActivity extends AppCompatActivity {
     protected void onDestroy() {
         unbindService(mConnection);
 
-        if (mRemoteBookManager != null && mRemoteBookManager.asBinder().isBinderAlive()){
+        if (mRemoteBookManager != null && mRemoteBookManager.asBinder().isBinderAlive()) {
             try {
-                mRemoteBookManager.registerListener(mOnNewBookArrivedListener);
+                mRemoteBookManager.unregisterListener(mOnNewBookArrivedListener);
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
@@ -66,16 +87,11 @@ public class BookManagerActivity extends AppCompatActivity {
 
                 mRemoteBookManager = bookManager;
 
-                List<Book> bookList = bookManager.getBookList();
-                Log.e("", "----bookList: " + bookList.toString());
-
-                bookManager.addBook(new Book(6, "Android艺术探索"));
-
-                List<Book> newList = bookManager.getBookList();
-                Log.e("", "----newList: " + newList.toString());
-
                 // 注册监听
-                bookManager.registerListener(mOnNewBookArrivedListener);
+                mRemoteBookManager.registerListener(mOnNewBookArrivedListener);
+
+                // 设置DeathRecipient监听Binder意外死亡，这运行在Binder线程池（还有一种方法，就是在onServiceDisconnected中重连）
+//                mRemoteBookManager.asBinder().linkToDeath(mDeathRecipient, 0);
 
             } catch (RemoteException e) {
                 e.printStackTrace();
@@ -84,7 +100,21 @@ public class BookManagerActivity extends AppCompatActivity {
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
+            // 当服务意外停止时，需要重连服务，这是运行在主线程的（还有一种重连服务的方法，设置DeathRecipient监听，这运行在Binder线程池）
+            bindRemoteService();
+        }
+    };
 
+    private IBinder.DeathRecipient mDeathRecipient = new IBinder.DeathRecipient() {
+        @Override
+        public void binderDied() {
+            if (mRemoteBookManager != null) {
+                // 解除死亡通知，如果Binder死亡了，不会再触发binderDied方法
+                mRemoteBookManager.asBinder().unlinkToDeath(mDeathRecipient, 0);
+                mRemoteBookManager = null;
+                // 重新启动服务
+                bindRemoteService();
+            }
         }
     };
 
